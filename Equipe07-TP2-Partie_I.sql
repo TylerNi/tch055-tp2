@@ -136,3 +136,112 @@ SELECT matricule, nom, specialite
 FROM Technicien
 WHERE matricule NOT IN (SELECT matricule FROM Intervention)
 ORDER BY matricule;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.1
+SELECT IV.num_vol, IV.date_vol, V.ville_depart, V.ville_arrivee,
+       IV.heure_depart_reelle, IV.heure_arrivee_reelle,
+       IV.terminal_depart, IV.piste_depart
+FROM Instance_Vol IV
+JOIN Vol V ON IV.num_vol = V.num_vol
+WHERE IV.date_vol = TO_DATE('04-03-2026', 'DD-MM-YYYY')
+  AND V.ville_depart = 'Montreal'
+  AND IV.heure_depart_reelle = (
+      SELECT MIN(IV2.heure_depart_reelle)
+      FROM Instance_Vol IV2
+      JOIN Vol V2 ON IV2.num_vol = V2.num_vol
+      WHERE IV2.date_vol = TO_DATE('04-03-2026', 'DD-MM-YYYY')
+        AND V2.ville_depart = 'Montreal'
+  );
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.2
+SELECT M.matricule, M.nom, VME.num_vol, VME.date_vol, VME.poste_occupe
+FROM Membre_equipage M
+JOIN Vol_Membre_equipage VME ON M.matricule = VME.matricule
+WHERE (VME.num_vol, VME.date_vol) IN (
+    SELECT VME2.num_vol, VME2.date_vol
+    FROM Vol_Membre_equipage VME2
+    JOIN Membre_equipage M2 ON VME2.matricule = M2.matricule
+    WHERE M2.nom = 'Julie Will'
+)
+  AND M.nom <> 'Julie Will'
+ORDER BY VME.num_vol, VME.date_vol;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.3 a)
+CREATE OR REPLACE VIEW V_Vol_Equipage AS
+SELECT M.*, VME.poste_occupe, VME.num_vol, VME.date_vol,
+       IV.heure_depart_reelle, IV.terminal_depart,
+       IV.code_aeroport_depart, IV.code_aeroport_arrivee
+FROM Membre_equipage M
+JOIN Vol_Membre_equipage VME ON M.matricule = VME.matricule
+JOIN Instance_Vol IV ON VME.num_vol = IV.num_vol
+                     AND VME.date_vol = IV.date_vol;
+
+SELECT *
+FROM V_Vol_Equipage
+ORDER BY num_vol, date_vol;
+
+-- Requete 3.3 b)
+SELECT num_vol, date_vol, matricule, nom, type_membre, poste_occupe,
+       heure_depart_reelle, terminal_depart
+FROM V_Vol_Equipage
+WHERE num_vol = 'AC1212'
+  AND date_vol = TO_DATE('08-05-2026', 'DD-MM-YYYY')
+ORDER BY matricule;
+
+-- Requete 3.3 c)
+SELECT VVE.num_vol, VVE.date_vol, VVE.heure_depart_reelle,
+       VVE.matricule, VVE.nom, VVE.poste_occupe,
+       AD.nom_aeroport AS "Aéroport Départ",
+       AD.ville AS "Ville Départ",
+       AA.nom_aeroport AS "Aéroport Arrivée",
+       AA.ville AS "Ville Arrivée"
+FROM V_Vol_Equipage VVE
+JOIN Aeroport AD ON VVE.code_aeroport_depart = AD.code_aeroport
+JOIN Aeroport AA ON VVE.code_aeroport_arrivee = AA.code_aeroport
+WHERE VVE.nom = 'Bruce Wane'
+ORDER BY VVE.date_vol, VVE.heure_depart_reelle;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.4
+SELECT C.*, V.num_vol, V.ville_depart, V.ville_arrivee
+FROM Compagnie C
+LEFT JOIN Vol V ON C.code_activite = V.cie_code_activite
+ORDER BY C.code_activite;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.5
+SELECT T.matricule, T.nom, T.specialite,
+       COUNT(I.id_maintenance) AS Nbre_Maintenances,
+       NVL(SUM(I.nbre_heures), 0) AS Total_Heures
+FROM Technicien T
+LEFT JOIN Intervention I ON T.matricule = I.matricule
+GROUP BY T.matricule, T.nom, T.specialite
+ORDER BY T.matricule;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.6 a)
+SELECT P.code_piece, P.label, P.prix_unitaire,
+       COUNT(MP.id_maintenance) AS Quantite_Totale,
+       P.prix_unitaire * COUNT(MP.id_maintenance) AS Prix_Total
+FROM Piece P
+JOIN Maintenance_Piece MP ON P.code_piece = MP.code_piece
+GROUP BY P.code_piece, P.label, P.prix_unitaire
+ORDER BY Prix_Total DESC;
+
+-- Requete 3.6 b)
+SELECT SUM(P.prix_unitaire) AS Montant_Total_Pieces
+FROM Piece P
+JOIN Maintenance_Piece MP ON P.code_piece = MP.code_piece;
+
+-- -----------------------------------------------------------------------------
+-- Requete 3.7
+SELECT T.specialite, COUNT(*) AS Nombre_Techniciens
+FROM Technicien T
+WHERE T.matricule IN (
+    SELECT DISTINCT I.matricule
+    FROM Intervention I
+)
+GROUP BY T.specialite;
